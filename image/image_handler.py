@@ -12,6 +12,7 @@ from collections import defaultdict
 from config import *
 from exception import RequestException
 from region import Region, Point
+from region_value import RegionValue
 from predict import predict
 
 
@@ -75,13 +76,6 @@ class ImageHandler(object):
         with open(image_path, "wb") as writer:
             writer.write(base64.b64decode(self.image_info))
 
-    def get_origin_image(self):
-        image_base64 = base64.b64decode(self.image_info)
-        image_io = BytesIO(image_base64)
-        image = Image.open(image_io)
-
-        return image
-
     def get_gray_static_image(self):
         # 1.读取图像，2.判断为png还是gif，3.处理返回
         # 先保存图片
@@ -124,7 +118,7 @@ class ImageHandler(object):
         image_part_list = [image_part1, image_part2, image_part3, image_part4]
 
         if self.get_suffix() == "png":
-            image_list = [self.fill_border(image_part) for image_part in image_part_list]
+            image_list = [self.normal_region_png(image_part) for image_part in image_part_list]
         else:
             image_list = [self.normal_region(image_part) for image_part in image_part_list]
 
@@ -134,18 +128,18 @@ class ImageHandler(object):
         return predict(self.generate_uniform_image())
 
     @staticmethod
-    def fill_border(image, length=36):
+    def normal_region_png(image):
         width, height = image.shape
 
-        remain_height, remain_width = length - height, length - width
+        point_dict = dict()
 
-        top_fill = remain_height // 2
-        bottom_fill = (remain_height + 1) // 2
-        left_fill = remain_width // 2
-        right_fill = (remain_width + 1) // 2
+        for i in range(width):
+            for j in range(height):
+                if image[i, j] > 10:
+                    point_dict[Point(i, j)] = image[i, j]
 
-        return cv2.copyMakeBorder(image, left_fill, right_fill, top_fill, bottom_fill,
-                                  cv2.BORDER_CONSTANT, value=[0, 0, 0])
+        region_value = RegionValue(point_dict)
+        return region_value.generate_image()
 
     @staticmethod
     def normal_region(image):
@@ -159,10 +153,6 @@ class ImageHandler(object):
 
         maximum_value = max(fill_dict, key=lambda x: len(fill_dict.get(x)))
         maximum_set = fill_dict.get(maximum_value)
-
-        # maximum_set = reduce(set.union, [fill_dict.get(maximum_value + i) for i in range(-10, 10) if
-        #                                  (maximum_value + i)
-        #                                  in fill_dict])
 
         region = Region(maximum_set, maximum_value)
 
